@@ -11,7 +11,6 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE_NAME = "walmart_grocery_sample.csv"
 EMBEDDING_MODEL_PATH = os.path.join(ROOT_DIR, "embedding_model")
 VECTORDB_PATH = os.path.join(ROOT_DIR, "data", "db")
-print(f"ROOT_DIR: {ROOT_DIR}")
 
 # Read the product catalog data
 product_catalog = pd.read_csv(os.path.join(ROOT_DIR, "data", DATA_FILE_NAME))
@@ -29,7 +28,6 @@ product_catalog_sample.rename(
 product_catalog_sample.to_csv(
     os.path.join(ROOT_DIR, "data", "product_catalog_sample.csv"), index=False
 )
-print(f"product_catalog: {product_catalog_sample.head()}")
 
 
 # Create the vectordb
