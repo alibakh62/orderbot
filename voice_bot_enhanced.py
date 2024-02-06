@@ -3,6 +3,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import os
+import json
+import requests
+import re
 from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
@@ -73,6 +76,7 @@ You wait to collect the entire order, then summarize it and check for a final ti
 If it's a delivery, you ask for an address. \
 Make sure to clarify all options, extras and sizes to uniquely identify the item from the product catelog. \
 If the number of options for an item is more than three, select three options and ask the user to select one. Make sure to show the options in a numbered list format. Ask the customer to pick based on the numbers on the list. If the user can't find the item she wanted, show her another five options. Keep doing this until you show the customer all the available items. If the customer still can't find what she wanted, just apologize and say that we don't seem to have the item she's looking for.\
+ALWAYS show product name options in the numbered list format and include the word "OPTIONS" right before the numbered list. \
 You respond in a short, very conversational friendly style. \
 If the customer says something that is not clear, ask for clarification. \
 You only want to offer products from the product catalog listed below. If the customer's oder contain a product that is not in the product catalog, just apologize and say we don't have it. \
@@ -105,7 +109,10 @@ client = OpenAI(
 )  # Replace with your own key or find a way to use it indirectly.
 webm_file_path = "response_audio.mp3"
 
+# ----------------------- Helpers -----------------------
 
+
+# Voice helpers
 def get_answer(user_input, memory):
     memory.load_memory_variables({})
     loaded_memory = RunnablePassthrough.assign(
@@ -162,6 +169,61 @@ def autoplay_audio(file_path: str):
     """
     st.markdown(md, unsafe_allow_html=True)
 
+
+# Card component helpers
+def extract_product_names(input_string):
+    # Check if "OPTIONS" is in the input string
+    if "OPTIONS" not in input_string:
+        return "The input string does not contain product options."
+
+    # List to hold extracted product names
+    product_names = []
+
+    # Split the string into lines
+    lines = input_string.split("\n")
+
+    # Regular expression to match product names
+    # It looks for lines starting with a digit (the option number) followed by a period and a space, then captures the rest of the line
+    pattern = re.compile(r"^\d+\.\s+(.*)")
+
+    for line in lines:
+        # Try to find a match for the pattern
+        match = pattern.match(line)
+        if match:
+            # If a match is found, add the captured group (the product name) to the list
+            product_names.append(match.group(1))
+
+    return product_names
+
+
+def search(query):
+    url = "https://google.serper.dev/images"
+
+    payload = json.dumps({"q": query, "num": 3})
+    headers = {
+        "X-API-KEY": os.getenv("SERPER_API_KEY"),
+        "Content-Type": "application/json",
+    }
+
+    response = requests.request("POST", url, headers=headers, data=payload)
+    result = response.json()
+    image_url = result["images"][0]["imageUrl"]
+    filename = os.path.join(ROOT_DIR, "images", query.replace(" ", "_") + ".jpg")
+
+    def download_image(url):
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(filename, "wb") as file:
+                file.write(response.content)
+                print(f"Image successfully downloaded: {filename}")
+        else:
+            print(f"HTTP request failed with status code {response.status_code}")
+
+    download_image(image_url)
+    return filename
+
+
+# ----------------------- Streamlit -----------------------
 
 # Float feature initialization
 float_init()
@@ -235,15 +297,34 @@ else:
                     st.session_state.messages[-1]["content"], bot_memory
                 )
                 st.session_state.bot_memory = bot_memory
-                print(f"User input: {st.session_state.messages[-1]['content']}")
-                print(f"Final response: {final_response}")
-                print(f"History: {bot_memory.load_memory_variables({})['history']}")
+                # print(f"User input: {st.session_state.messages[-1]['content']}")
+                # print(f"Final response: {final_response}")
+                # print(f"History: {bot_memory.load_memory_variables({})['history']}")
                 print("-" * 100)
             with st.spinner("Generating audio response 🎵..."):
                 audio_file = text_to_speech(final_response)
             if st.button("▶️"):
                 autoplay_audio(audio_file)
-            st.write(final_response)
+            if "OPTIONS" in final_response:
+                print("******Product options found in the response******")
+                st.write(final_response)
+                # Extract product names from the response
+                product_names = extract_product_names(final_response)
+                print(f"Product names: {product_names}")
+                # Download the product images
+                filenames = []
+                for product_name in product_names:
+                    filenames.append(search(product_name))
+                # Display the product images
+                with st.container():
+                    cols = st.columns(len(filenames))
+                    for i, filename in enumerate(filenames):
+                        cols[i].image(
+                            filename, caption=f"{i+1}. {product_names[i]}", width=100
+                        )
+            else:
+                print("******No product options found in the response******")
+                st.write(final_response)
             st.session_state.messages.append(
                 {"role": "assistant", "content": final_response}
             )

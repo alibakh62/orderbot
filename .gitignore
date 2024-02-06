@@ -168,4 +168,5 @@ data/db/*
 walmart_grocery_sample.csv
 *.mp3
 *.webm
+images/
 
