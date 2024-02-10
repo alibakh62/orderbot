@@ -165,8 +165,9 @@ cython_debug/
 orderbot-env/
 embedding_model/*
 data/db/*
-walmart_grocery_sample.csv
+*.csv
 *.mp3
 *.webm
 images/
+data/db_*
 
